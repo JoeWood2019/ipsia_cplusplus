@@ -9,6 +9,6 @@ int main()
 	Mat img_result = img_ipsia("mao.jpg");
 	
 	imshow("RGB_mao", img_result);
-	waitKey(1000);
+	waitKey();
 	return 0;
 }

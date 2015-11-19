@@ -54,11 +54,25 @@ Mat img_ipsia(string filename)
 	img_input_sym.row(img_input_sym.rows - 2).copyTo(img_input_sym.row(img_input_sym.rows - 1));//(end,1:end)
 
 	Mat grad_x, grad_y;
-	Mat abs_grad_x;
+	Mat abs_grad_x,abs_grad_y;
 	Sobel(img_input, grad_x, CV_16S, 1, 0, 3, 1, 1, BORDER_REPLICATE);
+	Sobel(img_input, grad_y, CV_16S, 0, 1, 3, 1, 1, BORDER_REPLICATE);
 	convertScaleAbs(grad_x, abs_grad_x);
+	abs_grad_y = Mat_<uchar>(abs(grad_y));
+	
+	Mat _img_dest;
+	double ostu_threh = threshold(img_input, _img_dest, 0, 255, CV_THRESH_BINARY | CV_THRESH_OTSU);// get the ostu threshold for canny
+	Mat img_canny;
+	Canny(img_input, img_canny, ostu_threh*0.5, ostu_threh, 3);
+	Mat kern_clean = (Mat_<char>(3, 3) << 1, 1, 1, 1, 0, 1, 1, 1, 1);
+	Mat img_canny_clean_mask;
+	filter2D(img_canny, img_canny_clean_mask, CV_16U, kern_clean);
+	img_canny_clean_mask = Mat_<uchar>(abs(grad_y));
+	Mat img_canny_clean;// delete isolated pixel and get a clean canny image
+	img_canny.copyTo(img_canny_clean, img_canny_clean_mask);
 
-	imshow("gray_mao_sym", abs_grad_x);
+	imshow("gray_mao_sym_canny",img_canny);
 	waitKey();
+
 	return img_H;
 }
