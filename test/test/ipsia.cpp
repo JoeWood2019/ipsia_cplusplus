@@ -22,16 +22,172 @@ Mat img_gray_RGB2YCbCr(Mat src)
 	return y;
 }
 
-bool isEdge(Mat grad_mag, Mat img_grad_x, Mat img_grad_y, int x, int y)
+// distance along gradient (linear)
+double linearGM(Mat grad_mag, double xf, double yf, bool isHor)
+{
+	double G = 0; // result
+	int H = grad_mag.rows;
+	int W = grad_mag.cols;
+	int xi = int(floor(xf)); // the next pixel position
+	int yi = int(floor(yf));
+
+	if (isHor) // if deal with the horizen rod
+	{
+		if (xi<0 || xi>W-1) // the next pixel's x coordinate beyond the bound
+		{
+			return G = -1;
+		}
+		double dy = yf - yi; // double - int
+		if (dy < 1e-10) // occasionally yf is a int 
+		{
+			if (yi<0 || yi>H-1) // the next pixel's y coordinate beyond the bound
+			{
+				return G = -1;
+			}
+			else // return the next pixel's gradient magnitude
+			{
+				return G = grad_mag.at<double>(yi, xi);
+			}
+		}
+		else // usually yf is a double 
+		{
+			if (yi<-1 || yi>H - 1) // the next pixel's y coordinate far beyond the bound
+			{
+				return G = -1;
+			}
+			else
+			{
+				if (yi == -1) // the next pixel's y coordinate just beyond the bound
+				{
+					return G = grad_mag.at<double>(yi+1,xi);
+				}
+				if (yi == H - 1) // the next pixel's y coordinate just the bound
+				{
+					return G = grad_mag.at<double>(yi, xi);
+				}
+				// linear interpolation the gradient of (yf,xf)
+				return G = grad_mag.at<double>(yi, xi) + ( grad_mag.at<double>(yi + 1, xi) - grad_mag.at<double>(yi, xi) )*dy;
+			}
+		}
+	}
+	// vertical situation just the same
+	else
+	{
+		if (yi<0 || yi>H - 1)
+		{
+			return G = -1;
+		}
+		double dx = xf - xi;
+		if (dx < 1e-10)
+		{
+			if (xi<0 || xi>W - 1)
+			{
+				return G = -1;
+			}
+			else
+			{
+				return G = grad_mag.at<double>(yi, xi);
+			}
+		}
+		else
+		{
+			if (xi<-1 || xi>W - 1)
+			{
+				return G = -1;
+			}
+			else
+			{
+				if (yi == -1)
+				{
+					return G = grad_mag.at<double>(yi, xi + 1);
+				}
+				if (xi == W - 1)
+				{
+					return G = grad_mag.at<double>(yi, xi);
+				}
+				return G = grad_mag.at<double>(yi, xi) + ( grad_mag.at<double>(yi, xi + 1) - grad_mag.at<double>(yi, xi) )*dx;
+			}
+		}
+	}
+}
+
+bool trace_along_gradient(Mat grad_mag, int x,int y,double xf, double yf, double dy, double dx, bool isHor)
+{
+	int cnt = 0;
+	double pre = grad_mag.at<double>(y, x);
+	double G = 0,diff=0,xf_next=0,yf_next=0;
+
+	while (true)
+	{
+		xf_next = xf + dx;
+		yf_next = yf + dy;
+		G = linearGM(grad_mag, xf_next, yf_next, true); // the gradient magnitude in (xf,yf) (a linear interpolation approximate) 
+		if (G == -1)
+		{
+			break;
+		}
+		diff = pre - G;
+		if (diff > 0)
+		{
+			cnt++;
+			pre = G;
+		}
+		else
+		{
+			break;
+		}
+	}
+	if (cnt == 0)
+	{
+		return false;
+	}
+	else
+	{
+		return true;
+	}
+}
+
+bool isEdge(Mat grad_mag, Mat img_grad_x, Mat img_grad_y, int y, int x) // attention!! y= number of the current row, x= current col
 {
 	bool flag = false;
-	if (grad_mag.at<double>(x, y) < 1e-10)
+	if (grad_mag.at<double>(y, x) < 1e-10)
 	{
 		return flag;
 	}
+	// some preparation
+	double xf = x;
+	double yf = y;
+	double G = 0,diff =0;
+
 	double grad_x, grad_y;
-	grad_x = img_grad_x.at<double>(x, y);
-	grad_y = img_grad_y.at<double>(x, y);
+	grad_x = img_grad_x.at<double>(y, x);
+	grad_y = img_grad_y.at<double>(y, x);
+	if (abs(grad_x) > abs(grad_y))
+	{
+		// trace along x positive
+		double dy = grad_y / grad_x;
+		double dx = 1;
+		flag = trace_along_gradient(grad_mag, x, y, xf, yf, dy, dx, true);
+		if (!flag)
+		{
+			return false;
+		}
+		 
+		// trace along x negative
+		dx = -dx;
+		dy = -dy;
+		xf = x;
+		yf = y;
+		flag = trace_along_gradient(grad_mag, x, y, xf, yf, dy, dx, true);
+		if (!flag)
+		{
+			return false;
+		}
+	}
+	else
+	{
+
+	}
 	return flag;
 }
 
