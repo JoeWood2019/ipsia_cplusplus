@@ -293,8 +293,8 @@ Mat img_grad_mask(Mat grad_mag,Mat grad_x,Mat grad_y, Mat img_sym, double TH_G, 
 				{
 					continue;
 				}
-			}
-			mask.at<unsigned char>(i, j) = 255;
+				mask.at<unsigned char>(i, j) = 255;
+			}	
 		}
 	}
 	return mask;
@@ -370,7 +370,8 @@ Mat img_ipsia(string filename)
 
 	//Mat img_show;
 	//normalize(img_mask_clean, img_show, 0, 255, NORM_MINMAX);
-	imshow("gray_sobel_mag", img_mask_clean);
+	namedWindow("mao", WINDOW_NORMAL);
+	imshow("mao", img_mask_clean);
 	waitKey();
 
 	return img_H;
