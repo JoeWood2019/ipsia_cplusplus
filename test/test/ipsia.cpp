@@ -300,11 +300,58 @@ Mat img_grad_mask(Mat grad_mag,Mat grad_x,Mat grad_y, Mat img_sym, double TH_G, 
 	return mask;
 }
 
-Mat img_ipsia(string filename)
+Mat stickExtract(Mat img_input_sym, Mat img_mask, int scale, bool bp_on)
+{
+	int maxIter, minDiff;
+	if (bp_on)
+	{
+		maxIter = 20;
+		minDiff = 1;
+	}
+
+	double PI90 = pi / 2;
+	double PI45 = pi / 4;
+	Mat imgH = Mat::zeros(scale*img_mask.rows,scale*img_mask.cols,CV_8U);
+	return imgH;
+}
+
+Mat edgeProcess(Mat img_sym, Mat *imgH, Mat mask, Mat gradx, Mat grady, int scale)
+{
+	int H = mask.rows, W = mask.cols;
+	int i = 0, j = 0;
+
+	int TH_v = 6;
+	int head = -1, tail = -1;
+	int sig[3];
+	int len = 0;
+
+	bool flag_mask;
+	for (i = 0; i < H; i++)
+	{
+		for (j = 0; j < W; j++)
+		{
+			if ((mask.at<uchar>(i, j) == 0))
+			{
+				continue;
+			}
+			if ((j == 0) || (j == W))
+			{
+				flag_mask = (mask.at<uchar>(i, j) > 0);
+			}
+			else
+			{
+				flag_mask = (mask.at<uchar>(i, j) > 0) ^ ((mask.at<uchar>(i, j) > 0) && (mask.at<uchar>(i, j - 1) > 0) && (mask.at<uchar>(i, j + 1) > 0));
+			}
+
+
+		}
+	}
+}
+
+Mat img_ipsia(string filename,int scale)
 {
 	Mat img = imread(filename);
 	Mat img_input;
-	Mat img_H;
 
 	// just don't input empty image
 	if (img.empty())
@@ -322,7 +369,9 @@ Mat img_ipsia(string filename)
 		img_input = img_gray_RGB2YCbCr(img);
 	}
 
-	img_H = img_input.clone();
+	Mat img_H;
+	img_H.create(img_input.rows * scale, img_input.cols * scale, CV_8U);
+	Mat *imgH_ptr = &img_H;
 
 	// make a first&end-symmetrical input image
 	Mat img_input_sym;
@@ -359,14 +408,19 @@ Mat img_ipsia(string filename)
 	//Mat img_canny_clean; // delete isolated pixel and get a clean canny image
 	//img_canny.copyTo(img_canny_clean, img_canny_clean_mask);
 
+	// get the mask that indicate the edge area
 	double TH_G = 100;
 	double TH_P = 50;
 	Mat img_mask = img_grad_mask(grad_magnitude, grad_x, grad_y, img_input_sym, TH_G, TH_P);
+	// delete isolated pixel and get a clean mask image
 	Mat kern_clean = (Mat_<char>(3, 3) << 1, 1, 1, 1, 0, 1, 1, 1, 1);
 	Mat img_mask_clean_temp;
 	filter2D(img_mask, img_mask_clean_temp, CV_8U, kern_clean); // after filter, the isolated pixel will be 0
-	Mat img_mask_clean; // delete isolated pixel and get a clean canny image
+	Mat img_mask_clean; 
 	img_mask.copyTo(img_mask_clean, img_mask_clean_temp);
+
+	// 
+	edgeProcess(img_input_sym, imgH_ptr, img_mask_clean, grad_x, grad_y, scale);
 
 	//Mat img_show;
 	//normalize(img_mask_clean, img_show, 0, 255, NORM_MINMAX);

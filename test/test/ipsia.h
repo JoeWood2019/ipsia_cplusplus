@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <opencv2\opencv.hpp>
+#define pi 3.1416926
 
 using namespace cv;
 using namespace std;
@@ -15,6 +16,8 @@ double linearGM(Mat grad_mag,double xf,double yf,bool isHor);
 bool trace_along_gradient(Mat grad_mag, int x, int y, double dy, double dx, bool isHor);
 double min_8_neighbor(Mat image, int i, int j); // mininum in (x:x=2,y:y+2)
 double max_8_neighbor(Mat image, int i, int j); // maxnum in (x:x+2,y:y+2)
+Mat stickExtract(Mat img_input_sym, Mat img_mask, int scale, bool bp_on);
+Mat edgeProcess(Mat img_sym,Mat *imgH,Mat mask,Mat gradx,Mat grady, int scale);
 
-Mat img_ipsia(string filename);
+Mat img_ipsia(string filename,int scale);
 #endif
