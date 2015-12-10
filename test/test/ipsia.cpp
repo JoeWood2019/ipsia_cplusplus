@@ -21,6 +21,63 @@ Mat img_gray_RGB2YCbCr(Mat src)
 
 	return y;
 }
+double min_8_neighbor(Mat image, int i, int j)// mininum in (x:x=2,y:y+2)
+{
+	if (image.depth() != CV_8U)
+	{
+		cout << "the data type of the image is wrong!" << endl;
+		exit(-1);
+	}
+	double neighbor[8];
+	neighbor[0] = image.at<uchar>(i, j);
+	neighbor[1] = image.at<uchar>(i, j + 1);
+	neighbor[2] = image.at<uchar>(i, j + 2);
+	neighbor[3] = image.at<uchar>(i + 1, j);
+	neighbor[4] = image.at<uchar>(i + 1, j + 2);
+	neighbor[5] = image.at<uchar>(i + 2, j);
+	neighbor[6] = image.at<uchar>(i + 2, j + 1);
+	neighbor[7] = image.at<uchar>(i + 2, j + 2);
+
+	double min_value;
+	min_value = neighbor[0];
+	for (int x = 1; x < 8; x++)
+	{
+		if (neighbor[x] < min_value)
+		{
+			min_value = neighbor[x];
+		}
+	}
+	return min_value;
+}
+double max_8_neighbor(Mat image, int i, int j) // maxinum in (x:x+2,y:y+2)
+{
+	if (image.depth() != CV_8U)
+	{
+		cout << "the data type of the image is wrong!" << endl;
+		exit(-1);
+	}
+	double neighbor[8];
+	neighbor[0] = image.at<uchar>(i, j);
+	neighbor[1] = image.at<uchar>(i, j + 1);
+	neighbor[2] = image.at<uchar>(i, j + 2);
+	neighbor[3] = image.at<uchar>(i + 1, j);
+	neighbor[4] = image.at<uchar>(i + 1, j + 2);
+	neighbor[5] = image.at<uchar>(i + 2, j);
+	neighbor[6] = image.at<uchar>(i + 2, j + 1);
+	neighbor[7] = image.at<uchar>(i + 2, j + 2);
+
+	double max_value;
+	max_value = neighbor[0];
+	for (int x = 1; x < 8; x++)
+	{
+		if (neighbor[x] > max_value)
+		{
+			max_value = neighbor[x];
+		}
+	}
+	return max_value;
+}
+
 
 // distance along gradient (linear)
 double linearGM(Mat grad_mag, double xf, double yf, bool isHor)
@@ -205,63 +262,6 @@ bool isEdge(Mat grad_mag, Mat img_grad_x, Mat img_grad_y, int y, int x) // atten
 	return flag;
 }
 
-double min_8_neighbor(Mat image, int i, int j)// mininum in (x:x=2,y:y+2)
-{
-	if (image.depth() != CV_8U)
-	{
-		cout << "the data type of the image is wrong!" << endl;
-		exit(-1);
-	}
-	double neighbor[8];
-	neighbor[0] = image.at<uchar>(i, j);
-	neighbor[1] = image.at<uchar>(i, j + 1);
-	neighbor[2] = image.at<uchar>(i, j + 2);
-	neighbor[3] = image.at<uchar>(i + 1, j);
-	neighbor[4] = image.at<uchar>(i + 1, j + 2);
-	neighbor[5] = image.at<uchar>(i + 2, j);
-	neighbor[6] = image.at<uchar>(i + 2, j + 1);
-	neighbor[7] = image.at<uchar>(i + 2, j + 2);
-
-	double min_value;
-	min_value = neighbor[0];
-	for (int x = 1; x < 8; x++)
-	{
-		if (neighbor[x] < min_value)
-		{
-			min_value = neighbor[x];
-		}
-	}
-	return min_value;
-}
-double max_8_neighbor(Mat image, int i, int j) // maxinum in (x:x+2,y:y+2)
-{
-	if (image.depth() != CV_8U)
-	{
-		cout << "the data type of the image is wrong!" << endl;
-		exit(-1);
-	}
-	double neighbor[8];
-	neighbor[0] = image.at<uchar>(i, j);
-	neighbor[1] = image.at<uchar>(i, j + 1);
-	neighbor[2] = image.at<uchar>(i, j + 2);
-	neighbor[3] = image.at<uchar>(i + 1, j);
-	neighbor[4] = image.at<uchar>(i + 1, j + 2);
-	neighbor[5] = image.at<uchar>(i + 2, j);
-	neighbor[6] = image.at<uchar>(i + 2, j + 1);
-	neighbor[7] = image.at<uchar>(i + 2, j + 2);
-
-	double max_value;
-	max_value = neighbor[0];
-	for (int x = 1; x < 8; x++)
-	{
-		if (neighbor[x] > max_value)
-		{
-			max_value = neighbor[x];
-		}
-	}
-	return max_value;
-}
-
 Mat img_grad_mask(Mat grad_mag,Mat grad_x,Mat grad_y, Mat img_sym, double TH_G, double TH_P) // edge extraction
 {
 	if (grad_mag.depth() != CV_64F)
@@ -318,32 +318,149 @@ Mat stickExtract(Mat img_input_sym, Mat img_mask, int scale, bool bp_on)
 Mat edgeProcess(Mat img_sym, Mat *imgH, Mat mask, Mat gradx, Mat grady, int scale)
 {
 	int H = mask.rows, W = mask.cols;
-	int i = 0, j = 0;
+	int i = 0, j = 0, k = 0;
 
 	int TH_v = 6;
-	int head = -1, tail = -1;
+	int head_y = -1, head_x = -1, tail_y = -1, tail_x = -1;
 	int sig[3];
-	int len = 0;
+	int len = 0, slope = 0;
+
+	double gx, gy;
 
 	bool flag_mask;
-	for (i = 0; i < H; i++)
+
+	for (j = 0; j < W; j++)
 	{
-		for (j = 0; j < W; j++)
+		for (i = 0; i < H; i++)
 		{
-			if ((mask.at<uchar>(i, j) == 0))
+			if ((mask.at<uchar>(i, j) == 0)) // the value in mask(i,j) is negative
 			{
 				continue;
 			}
-			if ((j == 0) || (j == W))
+			if ((j == 0) || (j == W)) // boundary situation
 			{
 				flag_mask = (mask.at<uchar>(i, j) > 0);
 			}
-			else
+			else // mask(i,j) - ( mask(i,j) & mask(i,j-1) & mask(i,j+1) )
 			{
 				flag_mask = (mask.at<uchar>(i, j) > 0) ^ ((mask.at<uchar>(i, j) > 0) && (mask.at<uchar>(i, j - 1) > 0) && (mask.at<uchar>(i, j + 1) > 0));
 			}
 
+			if (!flag_mask) // rod of 3 pixels long is not horizonal
+			{
+				continue;
+			}
 
+			if (len == 0) // the start of rod
+			{
+				head_y = i;
+				head_x = j;
+				for (k = 0; k < 3; k++) // initialize the sig which marks three different directions(situations) 
+				{
+					sig[k] = 0;
+				}
+				// obtain the graduation information
+				gy = grady.at<double>(i, j);
+				gx = gradx.at<double>(i, j);
+				// three directions
+				if (abs(gy) > 0)
+				{
+					if (abs(gy) > 1)
+					{
+						sig[1] = sig[1] + 1;
+					}
+					else
+					{
+						if (gy*gx > 0)
+						{
+							sig[0] = sig[0] + 1;
+						}
+						else
+						{
+							sig[2] = sig[2] + 1;
+						}
+					}
+				}
+			}
+			else
+			{
+				// the flag_mask positive pixels is continue in y coordinate and the same in x coordinate
+				bool flag = ((mask.at<uchar>(i, j) == mask.at<uchar>(i - 1, j)) && (mask.at<uchar>(i, j) == mask.at<uchar>(i, j - 1)));
+				if (flag)
+				{
+					len = len + 1;
+					// obtain the graduation information
+					gy = grady.at<double>(i, j);
+					gx = gradx.at<double>(i, j);
+					// three directions
+					if (abs(gy) > 0)
+					{
+						if (abs(gy) > 1)
+						{
+							sig[1] = sig[1] + 1;
+						}
+						else
+						{
+							if (gy*gx > 0)
+							{
+								sig[0] = sig[0] + 1;
+							}
+							else
+							{
+								sig[2] = sig[2] + 1;
+							}
+						}
+					}
+					continue;
+				}
+				// deal with the whole rod
+				tail_x = j - 1;
+				tail_y = i - 1;
+				if (len > TH_v)
+				{
+					slope = 10;
+				}
+				else
+				{
+					bool corner[4]; // 4 corner around the rod
+					if (head_y == 0 || head_x == 0) // left-top 
+					{
+						corner[0] = false;
+					}
+					else
+					{
+						corner[0] = (mask.at<uchar>(head_y-1, head_x-1) > 0);
+					}
+					if (head_y == 0 || head_x == W) // right-top 
+					{
+						corner[1] = false;
+					}
+					else
+					{
+						corner[1] = (mask.at<uchar>(head_y - 1, head_x + 1) > 0);
+					}
+					if (tail_y == H || tail_x == 0) // left-bottom
+					{
+						corner[2] = false;
+					}
+					else
+					{
+						corner[2] = (mask.at<uchar>(tail_y+ 1, tail_x - 1) > 0);
+					}
+					if (tail_y == H || tail_x == W) // right-bottom
+					{
+						corner[3] = false;
+					}
+					else
+					{
+						corner[3] = (mask.at<uchar>(tail_y + 1, tail_x + 1) > 0);
+					}
+					if (corner[0] || corner[1] || corner[2] || corner[3])
+					{
+
+					}
+				}
+			}
 		}
 	}
 }
