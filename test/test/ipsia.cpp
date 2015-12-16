@@ -77,7 +77,39 @@ double max_8_neighbor(Mat image, int i, int j) // maxinum in (x:x+2,y:y+2)
 	}
 	return max_value;
 }
+bool max_value_position_in_array(int *data, int *max_value, int *idx) // return max_multi_flag
+{
+	int array_len = sizeof(data) / sizeof(data[0]);
+	// find the first max value and its position
+	*max_value = data[0];
+	*idx = 0;
+	for (int i = 0; i < array_len; i++)
+	{
+		if (data[i] > *max_value)
+		{
+			*max_value = data[i];
+			*idx = i;
+		}
+	}
+	// max value count
+	int max_count = 0;
+	for (int i = 0; i < array_len; i++)
+	{
+		if (data[i] == *max_value)
+		{
+			max_count++;
+		}
+	}
 
+	if (max_count == 0)
+	{
+		return false;
+	}
+	else
+	{
+		return true;
+	}
+}
 
 // distance along gradient (linear)
 double linearGM(Mat grad_mag, double xf, double yf, bool isHor)
@@ -315,7 +347,7 @@ Mat stickExtract(Mat img_input_sym, Mat img_mask, int scale, bool bp_on)
 	return imgH;
 }
 
-Mat edgeProcess(Mat img_sym, Mat *imgH, Mat mask, Mat gradx, Mat grady, int scale)
+Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat grady, int scale)
 {
 	int H = mask.rows, W = mask.cols;
 	int i = 0, j = 0, k = 0;
@@ -327,14 +359,15 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat mask, Mat gradx, Mat grady, int scal
 
 	double gx, gy;
 
-	bool flag_mask;
+	bool flag_mask=false, flag_mask_pre=false;
 
 	for (j = 0; j < W; j++)
 	{
 		for (i = 0; i < H; i++)
 		{
-			if ((mask.at<uchar>(i, j) == 0)) // the value in mask(i,j) is negative
+			if ((mask.at<uchar>(i, j) == 0 && len == 0)) // the value in mask(i,j) is negative
 			{
+				flag_mask_pre = false;
 				continue;
 			}
 			if ((j == 0) || (j == W)) // boundary situation
@@ -346,15 +379,21 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat mask, Mat gradx, Mat grady, int scal
 				flag_mask = (mask.at<uchar>(i, j) > 0) ^ ((mask.at<uchar>(i, j) > 0) && (mask.at<uchar>(i, j - 1) > 0) && (mask.at<uchar>(i, j + 1) > 0));
 			}
 
-			if (!flag_mask) // rod of 3 pixels long is not horizonal
+			// ----------------------------------------------------------------------------------------------
+			if (!flag_mask && len == 0) // rod of 3 pixels long is not horizonal	
 			{
+				flag_mask_pre = flag_mask;
 				continue;
 			}
 
 			if (len == 0) // the start of rod
 			{
+				flag_mask_pre = flag_mask;
+				len = 1;
 				head_y = i;
 				head_x = j;
+				tail_y = i;
+				tail_x = j;
 				for (k = 0; k < 3; k++) // initialize the sig which marks three different directions(situations) 
 				{
 					sig[k] = 0;
@@ -385,10 +424,12 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat mask, Mat gradx, Mat grady, int scal
 			else
 			{
 				// the flag_mask positive pixels is continue in y coordinate and the same in x coordinate
-				bool flag = ((mask.at<uchar>(i, j) == mask.at<uchar>(i - 1, j)) && (mask.at<uchar>(i, j) == mask.at<uchar>(i, j - 1)));
-				if (flag)
+				////bool flag = ((mask.at<uchar>(i, j) == mask.at<uchar>(i - 1, j)) && (mask.at<uchar>(i, j) == mask.at<uchar>(i, j - 1)));
+				bool flag = flag_mask && flag_mask_pre;
+				if (flag && i != 0) // i!=0 prevent j:j -> j+1, i:H-1 -> 0
 				{
 					len = len + 1;
+					tail_y++;
 					// obtain the graduation information
 					gy = grady.at<double>(i, j);
 					gx = gradx.at<double>(i, j);
@@ -413,9 +454,8 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat mask, Mat gradx, Mat grady, int scal
 					}
 					continue;
 				}
+
 				// deal with the whole rod
-				tail_x = j - 1;
-				tail_y = i - 1;
 				if (len > TH_v)
 				{
 					slope = 10;
@@ -457,9 +497,50 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat mask, Mat gradx, Mat grady, int scal
 					}
 					if (corner[0] || corner[1] || corner[2] || corner[3])
 					{
-
+						int max_value_sig = 0, idx = 0;
+						bool max_value_multi_flag = max_value_position_in_array(sig, &max_value_sig, &idx);
+						if (max_value_multi_flag)
+						{
+							slope = 0;
+						}
+						else
+						{
+							switch (idx)
+							{
+							case 0:
+								slope = -len;
+								break;
+							case 1:
+								slope = 10;
+								break;
+							case 2:
+								slope = len;
+								break;
+							default:
+								slope = 0;
+							}
+						}
+					}
+					else
+					{
+						slope = 0;
 					}
 				}
+
+				// handle rod
+				if (slope != 0)
+				{
+					(*edges)(Rect(head_x, head_y, tail_x - head_x+1, tail_y - head_y+1)) = 255;
+					Mat block;
+					block.create(tail_y - head_y + 1, tail_x - head_x + 3, CV_8U);
+					img_sym(Rect(head_x - 2, head_y - 1, tail_x - head_x + 3, tail_y - head_y + 1)).copyTo(block);
+					namedWindow("block", WINDOW_NORMAL);
+					imshow("block", block);
+				}
+
+				// prepare for next rod
+				len = 0;
+				flag_mask_pre = flag_mask;
 			}
 		}
 	}
@@ -486,9 +567,9 @@ Mat img_ipsia(string filename,int scale)
 		img_input = img_gray_RGB2YCbCr(img);
 	}
 
-	Mat img_H;
+	Mat img_H,edges;
 	img_H.create(img_input.rows * scale, img_input.cols * scale, CV_8U);
-	Mat *imgH_ptr = &img_H;
+	edges.create(img_input.rows * scale, img_input.cols * scale, CV_8U);
 
 	// make a first&end-symmetrical input image
 	Mat img_input_sym;
@@ -510,6 +591,7 @@ Mat img_ipsia(string filename,int scale)
 	Mat grad_magnitude;
 	grad_magnitude = grad_x_square + grad_y_square;
 	sqrt(grad_magnitude, grad_magnitude);
+
 	//Mat grad_angle;
 	//atan2(grad_y, grad_x, grad_angle);
 
@@ -525,11 +607,11 @@ Mat img_ipsia(string filename,int scale)
 	//Mat img_canny_clean; // delete isolated pixel and get a clean canny image
 	//img_canny.copyTo(img_canny_clean, img_canny_clean_mask);
 
-	// get the mask that indicate the edge area
+	// get the mask that indicate the edge area------------------------------------------------------------------
 	double TH_G = 100;
 	double TH_P = 50;
 	Mat img_mask = img_grad_mask(grad_magnitude, grad_x, grad_y, img_input_sym, TH_G, TH_P);
-	// delete isolated pixel and get a clean mask image
+	  // delete isolated pixel and get a clean mask image
 	Mat kern_clean = (Mat_<char>(3, 3) << 1, 1, 1, 1, 0, 1, 1, 1, 1);
 	Mat img_mask_clean_temp;
 	filter2D(img_mask, img_mask_clean_temp, CV_8U, kern_clean); // after filter, the isolated pixel will be 0
@@ -537,7 +619,7 @@ Mat img_ipsia(string filename,int scale)
 	img_mask.copyTo(img_mask_clean, img_mask_clean_temp);
 
 	// 
-	edgeProcess(img_input_sym, imgH_ptr, img_mask_clean, grad_x, grad_y, scale);
+	edgeProcess(img_input_sym, &img_H, &edges, img_mask_clean, grad_x, grad_y, scale);
 
 	//Mat img_show;
 	//normalize(img_mask_clean, img_show, 0, 255, NORM_MINMAX);
