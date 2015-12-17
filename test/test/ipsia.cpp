@@ -347,6 +347,45 @@ Mat stickExtract(Mat img_input_sym, Mat img_mask, int scale, bool bp_on)
 	return imgH;
 }
 
+void fililRod(Mat *block, Mat *p,int L, int scale, int slope, int TH)
+{
+	int PL, PR;
+	if (abs(slope) > TH) // vertical situation 
+	{
+		PL = int(ceil(double(scale) / 2));
+		if (scale % 2 == 0)
+		{
+			PR = PL + 1;
+		}
+		else
+		{
+			PR = PL;
+		}
+
+		for (int i = 0; i < L; i++)
+		{
+			for (int j = 0; j < scale; j++)
+			{
+				if (j < PL)
+				{
+					(*p)(Rect(j, i*scale, 1, scale)) = (*block).at<uchar>(i, 1);
+					continue;
+				}
+				if (j > PR)
+				{
+					(*p)(Rect(j, i*scale, 1, scale)) = (*block).at<uchar>(i, 3);
+					continue;
+				}
+				(*p)(Rect(j, i*scale, 1, scale)) = (*block).at<uchar>(i, 2);
+			}
+		}
+		return;
+	}
+
+
+
+}
+
 Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat grady, int scale)
 {
 	int H = mask.rows, W = mask.cols;
@@ -534,8 +573,13 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 					Mat block;
 					block.create(tail_y - head_y + 1, tail_x - head_x + 3, CV_8U);
 					img_sym(Rect(head_x - 2, head_y - 1, tail_x - head_x + 3, tail_y - head_y + 1)).copyTo(block);
+					int L = block.rows;
+					Mat Hpatch = Mat::zeros(scale*L, scale, CV_8U);
+					fililRod(&block, &Hpatch, L, scale, slope, TH_v);
+
 					namedWindow("block", WINDOW_NORMAL);
-					imshow("block", block);
+					imshow("block", Hpatch);
+					waitKey();
 				}
 
 				// prepare for next rod

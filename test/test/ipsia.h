@@ -20,6 +20,7 @@ double linearGM(Mat grad_mag,double xf,double yf,bool isHor);
 bool trace_along_gradient(Mat grad_mag, int x, int y, double dy, double dx, bool isHor);
 Mat stickExtract(Mat img_input_sym, Mat img_mask, int scale, bool bp_on);
 Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat grady, int scale);
+void fililRod(Mat *block, Mat *p, int L, int scale, int slope, int TH);
 
 Mat img_ipsia(string filename,int scale);
 #endif
