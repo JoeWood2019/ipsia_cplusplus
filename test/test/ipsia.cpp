@@ -379,11 +379,43 @@ void fililRod(Mat *block, Mat *p,int L, int scale, int slope, int TH)
 				(*p)(Rect(j, i*scale, 1, scale)) = (*block).at<uchar>(i, 2);
 			}
 		}
-		return;
 	}
-
-
-
+	else
+	{
+		Mat pLR = Mat::zeros(L*scale, 1, CV_32S);
+		if (slope > 0)
+		{
+			for (int i = 0; i < scale; i++)
+			{
+				(*block)(Rect(1, 0, 1, L)).copyTo((*p)(Rect(i, i*L, 1, L)));
+				pLR(Rect(0, i*L, 1, L)) = i;
+			}
+		}
+		else
+		{
+			for (int i = 1; i < scale; i++)
+			{
+				(*block)(Rect(1, 0, 1, L)).copyTo((*p)(Rect(scale-i, i*L, 1, L)));
+				pLR(Rect(0, i*L, 1, L)) = scale - i;
+			}
+		}
+		for (int i = 0; i < scale*L; i++)
+		{
+			for (int j = 0; j < scale; j++)
+			{
+				if (j < pLR.at<int>(i, 1))
+				{
+					(*p).at<uchar>(i, j) = (*block).at<uchar>(int(ceil(double(i) / double(scale) )), 0);
+					continue;
+				}
+				if (j > pLR.at<int>(i, 1))
+				{
+					(*p).at<uchar>(i, j) = (*block).at<uchar>(int(ceil(double(i) / double(scale))), 2);
+					continue;
+				}
+			}
+		}
+	}
 }
 
 Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat grady, int scale)
@@ -576,7 +608,7 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 					int L = block.rows;
 					Mat Hpatch = Mat::zeros(scale*L, scale, CV_8U);
 					fililRod(&block, &Hpatch, L, scale, slope, TH_v);
-
+					Hpatch.copyTo((*imgH)(Rect(head_x*scale, head_y*scale, (tail_x - head_x+1)*scale, (tail_y - head_y+1)*scale)));
 					namedWindow("block", WINDOW_NORMAL);
 					imshow("block", Hpatch);
 					waitKey();
