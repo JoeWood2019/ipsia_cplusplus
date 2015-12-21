@@ -431,7 +431,7 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 	double gx, gy;
 
 	bool flag_mask=false, flag_mask_pre=false;
-
+	// vertical rods ------------------------------------------------------------------------------
 	for (j = 0; j < W; j++)
 	{
 		for (i = 0; i < H; i++)
@@ -441,13 +441,13 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 				flag_mask_pre = false;
 				continue;
 			}
-			if ((j == 0) || (j == W)) // boundary situation
+			if ((i == 0) || (i == H-1)) // boundary situation
 			{
 				flag_mask = (mask.at<uchar>(i, j) > 0);
 			}
 			else // mask(i,j) - ( mask(i,j) & mask(i,j-1) & mask(i,j+1) )
 			{
-				flag_mask = (mask.at<uchar>(i, j) > 0) ^ ((mask.at<uchar>(i, j) > 0) && (mask.at<uchar>(i, j - 1) > 0) && (mask.at<uchar>(i, j + 1) > 0));
+				flag_mask = (mask.at<uchar>(i, j) > 0) ^ ((mask.at<uchar>(i, j) > 0) && (mask.at<uchar>(i - 1, j) > 0) && (mask.at<uchar>(i + 1, j) > 0));
 			}
 
 			// ----------------------------------------------------------------------------------------------
@@ -473,9 +473,9 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 				gy = grady.at<double>(i, j);
 				gx = gradx.at<double>(i, j);
 				// three directions
-				if (abs(gy) > 0)
+				if (abs(gx) > 0)
 				{
-					if (abs(gy) > 1)
+					if (abs(gy) < 1)
 					{
 						sig[1] = sig[1] + 1;
 					}
@@ -505,9 +505,9 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 					gy = grady.at<double>(i, j);
 					gx = gradx.at<double>(i, j);
 					// three directions
-					if (abs(gy) > 0)
+					if (abs(gx) > 0)
 					{
-						if (abs(gy) > 1)
+						if (abs(gy) < 1)
 						{
 							sig[1] = sig[1] + 1;
 						}
@@ -523,6 +523,7 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 							}
 						}
 					}
+					flag_mask_pre = flag_mask;
 					continue;
 				}
 
@@ -566,7 +567,7 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 					{
 						corner[3] = (mask.at<uchar>(tail_y + 1, tail_x + 1) > 0);
 					}
-					if (corner[0] || corner[1] || corner[2] || corner[3])
+					if (corner[0] || corner[1] || corner[2] || corner[3]) // rod directin cases
 					{
 						int max_value_sig = 0, idx = 0;
 						bool max_value_multi_flag = max_value_position_in_array(sig, &max_value_sig, &idx);
@@ -604,11 +605,201 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 					(*edges)(Rect(head_x, head_y, tail_x - head_x+1, tail_y - head_y+1)) = 255;
 					Mat block;
 					block.create(tail_y - head_y + 1, tail_x - head_x + 3, CV_8U);
-					img_sym(Rect(head_x - 2, head_y - 1, tail_x - head_x + 3, tail_y - head_y + 1)).copyTo(block);
+					img_sym(Rect(head_x , head_y +  1, tail_x - head_x + 3, tail_y - head_y + 1)).copyTo(block);
 					int L = block.rows;
 					Mat Hpatch = Mat::zeros(scale*L, scale, CV_8U);
 					fililRod(&block, &Hpatch, L, scale, slope, TH_v);
 					Hpatch.copyTo((*imgH)(Rect(head_x*scale, head_y*scale, (tail_x - head_x+1)*scale, (tail_y - head_y+1)*scale)));
+					namedWindow("block", WINDOW_NORMAL);
+					imshow("block", Hpatch);
+					waitKey();
+				}
+
+				// prepare for next rod
+				len = 0;
+				flag_mask_pre = flag_mask;
+			}
+		}
+	}
+	// horizontal rods -----------------------------------------------------------------------------
+	for (i = 0; i < H; i++)
+	{
+		for (j = 0; j < W; j++)
+		{
+			if ((mask.at<uchar>(i, j) == 0 && len == 0)) // the value in mask(i,j) is negative
+			{
+				flag_mask_pre = false;
+				continue;
+			}
+			if ((j == 0) || (j == W-1)) // boundary situation
+			{
+				flag_mask = (mask.at<uchar>(i, j) > 0);
+			}
+			else // mask(i,j) - ( mask(i,j) & mask(i,j-1) & mask(i,j+1) )
+			{
+				flag_mask = (mask.at<uchar>(i, j) > 0) ^ ((mask.at<uchar>(i, j) > 0) && (mask.at<uchar>(i, j - 1) > 0) && (mask.at<uchar>(i, j + 1) > 0));
+			}
+
+			// ----------------------------------------------------------------------------------------------
+			if (!flag_mask && len == 0) // rod of 3 pixels long is not horizonal	
+			{
+				flag_mask_pre = flag_mask;
+				continue;
+			}
+
+			if (len == 0) // the start of rod
+			{
+				flag_mask_pre = flag_mask;
+				len = 1;
+				head_y = i;
+				head_x = j;
+				tail_y = i;
+				tail_x = j;
+				for (k = 0; k < 3; k++) // initialize the sig which marks three different directions(situations) 
+				{
+					sig[k] = 0;
+				}
+				// obtain the graduation information
+				gy = grady.at<double>(i, j);
+				gx = gradx.at<double>(i, j);
+				// three directions
+				if (abs(gy) > 0)
+				{
+					if (abs(gx) > 1)
+					{
+						sig[1] = sig[1] + 1;
+					}
+					else
+					{
+						if (gy*gx > 0)
+						{
+							sig[0] = sig[0] + 1;
+						}
+						else
+						{
+							sig[2] = sig[2] + 1;
+						}
+					}
+				}
+			}
+			else
+			{
+				// the flag_mask positive pixels is continue in y coordinate and the same in x coordinate
+				////bool flag = ((mask.at<uchar>(i, j) == mask.at<uchar>(i - 1, j)) && (mask.at<uchar>(i, j) == mask.at<uchar>(i, j - 1)));
+				bool flag = flag_mask && flag_mask_pre;
+				if (flag && i != 0) // i!=0 prevent j:j -> j+1, i:H-1 -> 0
+				{
+					len = len + 1;
+					tail_x++;
+					// obtain the graduation information
+					gy = grady.at<double>(i, j);
+					gx = gradx.at<double>(i, j);
+					// three directions
+					if (abs(gy) > 0)
+					{
+						if (abs(gx) > 1)
+						{
+							sig[1] = sig[1] + 1;
+						}
+						else
+						{
+							if (gy*gx > 0)
+							{
+								sig[0] = sig[0] + 1;
+							}
+							else
+							{
+								sig[2] = sig[2] + 1;
+							}
+						}
+					}
+					flag_mask_pre = flag_mask;
+					continue;
+				}
+
+				// deal with the whole rod
+				if (len > TH_v)
+				{
+					slope = 10;
+				}
+				else
+				{
+					bool corner[4]; // 4 corner around the rod
+					if (head_y == 0 || head_x == 0) // left-top 
+					{
+						corner[0] = false;
+					}
+					else
+					{
+						corner[0] = (mask.at<uchar>(head_y - 1, head_x - 1) > 0);
+					}
+					if (head_y == 0 || head_x == W) // right-top 
+					{
+						corner[1] = false;
+					}
+					else
+					{
+						corner[1] = (mask.at<uchar>(head_y - 1, head_x + 1) > 0);
+					}
+					if (tail_y == H || tail_x == 0) // left-bottom
+					{
+						corner[2] = false;
+					}
+					else
+					{
+						corner[2] = (mask.at<uchar>(tail_y + 1, tail_x - 1) > 0);
+					}
+					if (tail_y == H || tail_x == W) // right-bottom
+					{
+						corner[3] = false;
+					}
+					else
+					{
+						corner[3] = (mask.at<uchar>(tail_y + 1, tail_x + 1) > 0);
+					}
+					if (corner[0] || corner[1] || corner[2] || corner[3]) // rod directin cases
+					{
+						int max_value_sig = 0, idx = 0;
+						bool max_value_multi_flag = max_value_position_in_array(sig, &max_value_sig, &idx);
+						if (max_value_multi_flag)
+						{
+							slope = 0;
+						}
+						else
+						{
+							switch (idx)
+							{
+							case 0:
+								slope = -len;
+								break;
+							case 1:
+								slope = 10;
+								break;
+							case 2:
+								slope = len;
+								break;
+							default:
+								slope = 0;
+							}
+						}
+					}
+					else
+					{
+						slope = 0;
+					}
+				}
+
+				// handle rod
+				if (slope != 0)
+				{
+					(*edges)(Rect(head_x, head_y, tail_x - head_x + 1, tail_y - head_y + 1)) = 255;
+					Mat block;
+					block.create(tail_y - head_y + 1, tail_x - head_x + 3, CV_8U);
+					img_sym(Rect(head_x - 2, head_y - 1, tail_x - head_x + 3, tail_y - head_y + 1)).copyTo(block);
+					int L = block.rows;
+					Mat Hpatch = Mat::zeros(scale*L, scale, CV_8U);
+					fililRod(&block, &Hpatch, L, scale, slope, TH_v);
+					Hpatch.copyTo((*imgH)(Rect(head_x*scale, head_y*scale, (tail_x - head_x + 1)*scale, (tail_y - head_y + 1)*scale)));
 					namedWindow("block", WINDOW_NORMAL);
 					imshow("block", Hpatch);
 					waitKey();
