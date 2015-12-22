@@ -6,7 +6,7 @@ using namespace cv;
 using namespace std;
 int main()
 {
-	Mat img_result = img_ipsia("C04_4_LR.png",2);
+	Mat img_result = img_ipsia("D03.bmp",3);
 	
 	imshow("RGB_mao", img_result);
 	waitKey();

@@ -1,6 +1,6 @@
 #include "ipsia.h"
 
-Mat img_gray_RGB2YCbCr(Mat src)
+Mat img_gray_RGB2YCbCr(Mat src,Mat *cb,Mat *cr,int scale)
 {
 	Mat img_ycbcr = src.clone();
 
@@ -11,11 +11,8 @@ Mat img_gray_RGB2YCbCr(Mat src)
 	split(img_ycbcr, channels);
 	y = channels.at(0);
 
-	//Mat cb;
-	//Mat cr;
-	//cr = channels.at(1);
-	//cb = channels.at(2);
-
+	resize(channels.at(1), *cr, Size(0, 0), scale, scale, INTER_CUBIC);
+	resize(channels.at(2), *cb, Size(0, 0), scale, scale, INTER_CUBIC);
 	//imshow("gray_mao", y);
 	//waitKey();
 
@@ -417,7 +414,7 @@ void fililRod(Mat *block, Mat *p,int L, int scale, int slope, int TH)
 	}
 }
 
-Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat grady, int scale)
+void edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat grady, int scale)
 {
 	int H = mask.rows, W = mask.cols;
 	int i = 0, j = 0, k = 0;
@@ -429,41 +426,37 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 
 	double gx, gy;
 
-	bool flag_mask=false, flag_mask_pre=false;
-	// vertical rods ------------------------------------------------------------------------------
+	bool flag_mask=false;
+
+	Mat cnt = Mat::zeros(H*scale, W*scale, CV_64F);
+	Mat img = Mat::zeros(H*scale, W*scale, CV_64F);
+// ------------------------------------------------------------------------------------------------
+// vertical rods ----------------------------------------------------------------------------------
 	for (j = 0; j < W; j++)
 	{
 		for (i = 0; i < H; i++)
 		{
-			if (i >= 127 && j >= 18)
-			{
-				cout << "lalala" << endl;
-			}
-
 			if ((mask.at<uchar>(i, j) == 0 && len == 0)) // the value in mask(i,j) is negative
 			{
-				//flag_mask_pre = false;
 				continue;
 			}
-			if ((i == 0) || (i == H-1)) // boundary situation
+
+			if ((j == 0) || (j == W - 1)) // boundary situation
 			{
 				flag_mask = (mask.at<uchar>(i, j) > 0);
 			}
-			else // mask(i,j) - ( mask(i,j) & mask(i,j-1) & mask(i,j+1) )
+			else // mask(i,j) - ( mask(i,j) & mask(i-1,j) & mask(i+1,j) )
 			{
-				flag_mask = (mask.at<uchar>(i, j) > 0) ^ ((mask.at<uchar>(i, j) > 0) && (mask.at<uchar>(i - 1, j) > 0) && (mask.at<uchar>(i + 1, j) > 0));
+				flag_mask = (mask.at<uchar>(i, j) > 0) ^ ((mask.at<uchar>(i, j) > 0) && (mask.at<uchar>(i, j - 1) > 0) && (mask.at<uchar>(i, j + 1) > 0));
 			}
-
 			// ----------------------------------------------------------------------------------------------
 			if (!flag_mask && len == 0) // rod of 3 pixels long is not horizonal	
 			{
-				//flag_mask_pre = flag_mask;
 				continue;
 			}
 
 			if (len == 0 && i != H-1) // the start of rod
 			{
-				//flag_mask_pre = flag_mask;
 				len = 1;
 				head_y = i;
 				head_x = j;
@@ -499,9 +492,20 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 			else
 			{
 				// the flag_mask positive pixels is continue in y coordinate and the same in x coordinate
-				bool flag = flag_mask && flag_mask_pre;
 				if (flag_mask) // i!=0 prevent j:j -> j+1, i:H-1 -> 0
 				{
+					if (len == 0) // boundary situation:  i==H-1
+					{
+						for (k = 0; k < direction_num; k++) // initialize the sig which marks three different directions(situations) 
+						{
+							sig[k] = 0;
+						}
+						len = 1;
+						head_y = i;
+						head_x = j;
+						tail_y = i;
+						tail_x = j;
+					}
 					// obtain the graduation information
 					gy = grady.at<double>(i, j);
 					gx = gradx.at<double>(i, j);
@@ -524,15 +528,7 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 							}
 						}
 					}
-					if (i == H - 1) // len=1 boundary situation
-					{
-						len = 1;
-						head_y = i;
-						head_x = j;
-						tail_y = i;
-						tail_x = j;
-					}
-					else
+					if (i != H - 1) // not boundary situation
 					{
 						len = len + 1;
 						tail_y++;
@@ -555,7 +551,7 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 					{
 						corner[0] = (mask.at<uchar>(head_y-1, head_x-1) > 0);
 					}
-					if (head_y == 0 || head_x == W) // right-top 
+					if (head_y == 0 || head_x == W-1) // right-top 
 					{
 						corner[1] = false;
 					}
@@ -563,7 +559,7 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 					{
 						corner[1] = (mask.at<uchar>(head_y - 1, head_x + 1) > 0);
 					}
-					if (tail_y == H || tail_x == 0) // left-bottom
+					if (tail_y == H-1 || tail_x == 0) // left-bottom
 					{
 						corner[2] = false;
 					}
@@ -571,7 +567,7 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 					{
 						corner[2] = (mask.at<uchar>(tail_y+ 1, tail_x - 1) > 0);
 					}
-					if (tail_y == H || tail_x == W) // right-bottom
+					if (tail_y == H-1 || tail_x == W-1) // right-bottom
 					{
 						corner[3] = false;
 					}
@@ -621,7 +617,16 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 					int L = block.rows;
 					Mat Hpatch = Mat::zeros(scale*L, scale, CV_8U);
 					fililRod(&block, &Hpatch, L, scale, slope, TH_v);
-					Hpatch.copyTo((*imgH)(Rect(head_x*scale, head_y*scale, (tail_x - head_x+1)*scale, (tail_y - head_y+1)*scale)));
+					//img(Rect(head_x*scale, head_y*scale, (tail_x - head_x + 1)*scale, (tail_y - head_y + 1)*scale)) = img(Rect(head_x*scale, head_y*scale, (tail_x - head_x + 1)*scale, (tail_y - head_y + 1)*scale)) + Hpatch;
+					for (int x = head_x*scale; x < head_x*scale + (tail_x - head_x + 1)*scale; x++)
+					{
+						for (int y = head_y*scale; y < head_y*scale + (tail_y - head_y + 1)*scale; y++)
+						{
+							uchar temp = Hpatch.at<uchar>(y - head_y*scale, x - head_x*scale);
+							img.at<double>(y, x) = img.at<double>(y, x) + double(temp);
+						}
+					}
+					cnt(Rect(head_x*scale, head_y*scale, (tail_x - head_x + 1)*scale, (tail_y - head_y + 1)*scale)) = cnt(Rect(head_x*scale, head_y*scale, (tail_x - head_x + 1)*scale, (tail_y - head_y + 1)*scale)) + 1;
 					/*namedWindow("block", WINDOW_NORMAL);
 					imshow("block", Hpatch); 
 					waitKey(10);*/
@@ -629,7 +634,6 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 
 				// prepare for next rod
 				len = 0;
-				//flag_mask_pre = flag_mask;
 			}
 		}
 	}
@@ -641,28 +645,26 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 		{
 			if ((mask.at<uchar>(i, j) == 0 && len == 0)) // the value in mask(i,j) is negative
 			{
-				flag_mask_pre = false;
 				continue;
 			}
-			if ((j == 0) || (j == W-1)) // boundary situation
+
+			if ((i == 0) || (i == H - 1)) // boundary situation
 			{
 				flag_mask = (mask.at<uchar>(i, j) > 0);
 			}
 			else // mask(i,j) - ( mask(i,j) & mask(i,j-1) & mask(i,j+1) )
 			{
-				flag_mask = (mask.at<uchar>(i, j) > 0) ^ ((mask.at<uchar>(i, j) > 0) && (mask.at<uchar>(i, j - 1) > 0) && (mask.at<uchar>(i, j + 1) > 0));
+				flag_mask = (mask.at<uchar>(i, j) > 0) ^ ((mask.at<uchar>(i, j) > 0) && (mask.at<uchar>(i - 1, j) > 0) && (mask.at<uchar>(i + 1, j) > 0));
 			}
 
 			// ----------------------------------------------------------------------------------------------
 			if (!flag_mask && len == 0) // rod of 3 pixels long is not horizonal	
 			{
-				flag_mask_pre = flag_mask;
 				continue;
 			}
 
-			if (len == 0) // the start of rod
+			if (len == 0 && j != W-1) // the start of rod
 			{
-				flag_mask_pre = flag_mask;
 				len = 1;
 				head_y = i;
 				head_x = j;
@@ -698,12 +700,20 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 			else
 			{
 				// the flag_mask positive pixels is continue in y coordinate and the same in x coordinate
-				////bool flag = ((mask.at<uchar>(i, j) == mask.at<uchar>(i - 1, j)) && (mask.at<uchar>(i, j) == mask.at<uchar>(i, j - 1)));
-				bool flag = flag_mask && flag_mask_pre;
-				if (flag && i != 0) // i!=0 prevent j:j -> j+1, i:H-1 -> 0
+				if (flag_mask) // there are two situations: boundary or ordinary
 				{
-					len = len + 1;
-					tail_x++;
+					if (len == 0) // boundary situation:  i==H-1
+					{
+						for (k = 0; k < direction_num; k++) // initialize the sig which marks three different directions(situations) 
+						{
+							sig[k] = 0;
+						}
+						len = 1;
+						head_y = i;
+						head_x = j;
+						tail_y = i;
+						tail_x = j;
+					}
 					// obtain the graduation information
 					gy = grady.at<double>(i, j);
 					gx = gradx.at<double>(i, j);
@@ -726,8 +736,12 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 							}
 						}
 					}
-					flag_mask_pre = flag_mask;
-					continue;
+					if (j != W - 1) // not boundary situation
+					{
+						len = len + 1;
+						tail_x++;
+						continue;
+					}
 				}
 
 				// deal with the whole rod
@@ -746,7 +760,7 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 					{
 						corner[0] = (mask.at<uchar>(head_y - 1, head_x - 1) > 0);
 					}
-					if (head_y == 0 || head_x == W) // right-top 
+					if (head_y == 0 || head_x == W-1) // right-top 
 					{
 						corner[1] = false;
 					}
@@ -754,7 +768,7 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 					{
 						corner[1] = (mask.at<uchar>(head_y - 1, head_x + 1) > 0);
 					}
-					if (tail_y == H || tail_x == 0) // left-bottom
+					if (tail_y == H-1 || tail_x == 0) // left-bottom
 					{
 						corner[2] = false;
 					}
@@ -762,7 +776,7 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 					{
 						corner[2] = (mask.at<uchar>(tail_y + 1, tail_x - 1) > 0);
 					}
-					if (tail_y == H || tail_x == W) // right-bottom
+					if (tail_y == H-1 || tail_x == W-1) // right-bottom
 					{
 						corner[3] = false;
 					}
@@ -811,19 +825,48 @@ Mat edgeProcess(Mat img_sym, Mat *imgH, Mat *edges, Mat mask, Mat gradx, Mat gra
 					img_sym(Rect(head_x + 1, head_y, tail_x - head_x + 1, tail_y - head_y + 3)).copyTo(block);
 					Mat block_transpose;
 					transpose(block, block_transpose);
-
-					int L = block.rows;
+					int L = block_transpose.rows;
 					Mat Hpatch = Mat::zeros(scale*L, scale, CV_8U);
 					fililRod(&block_transpose, &Hpatch, L, scale, slope, TH_v);
-					Hpatch.copyTo((*imgH)(Rect(head_x*scale, head_y*scale, (tail_x - head_x + 1)*scale, (tail_y - head_y + 1)*scale)));
-					namedWindow("block", WINDOW_NORMAL);
+					Mat Hpatch_transpose;
+					transpose(Hpatch, Hpatch_transpose);
+					for (int x = head_x*scale; x < head_x*scale + (tail_x - head_x + 1)*scale; x++)
+					{
+						for (int y = head_y*scale; y < head_y*scale + (tail_y - head_y + 1)*scale; y++)
+						{
+							uchar temp = Hpatch_transpose.at<uchar>(y - head_y*scale, x - head_x*scale);
+							img.at<double>(y, x) = img.at<double>(y, x) + double(temp);
+						}
+					}
+					//img(Rect(head_x*scale, head_y*scale, (tail_x - head_x + 1)*scale, (tail_y - head_y + 1)*scale)) = img(Rect(head_x*scale, head_y*scale, (tail_x - head_x + 1)*scale, (tail_y - head_y + 1)*scale)) + Hpatch_transpose;
+					cnt(Rect(head_x*scale, head_y*scale, (tail_x - head_x + 1)*scale, (tail_y - head_y + 1)*scale)) = cnt(Rect(head_x*scale, head_y*scale, (tail_x - head_x + 1)*scale, (tail_y - head_y + 1)*scale)) + 1;
+					/*namedWindow("block", WINDOW_NORMAL);
 					imshow("block", Hpatch);
-					waitKey();
+					waitKey(10);*/
 				}
 
 				// prepare for next rod
 				len = 0;
-				flag_mask_pre = flag_mask;
+			}
+		}
+	}
+
+	for (i = 0; i < H*scale; i++)
+	{
+		for (j = 0; j < W*scale; j++)
+		{
+			if (cnt.at<double>(i, j) > 1)
+			{
+				double temp = img.at<double>(i, j);
+				temp = temp / cnt.at<double>(i, j);
+				uchar result = uchar(temp);
+				(*imgH).at<uchar>(i, j) = result;
+			}
+			else
+			{
+				double temp = img.at<double>(i, j);
+				uchar result = uchar(temp);
+				(*imgH).at<uchar>(i, j) = result;
 			}
 		}
 	}
@@ -833,7 +876,7 @@ Mat img_ipsia(string filename,int scale)
 {
 	Mat img = imread(filename);
 	Mat img_input;
-
+	Mat img_cb, img_cr;
 	// just don't input empty image
 	if (img.empty())
 	{
@@ -847,12 +890,8 @@ Mat img_ipsia(string filename,int scale)
 	}
 	else
 	{
-		img_input = img_gray_RGB2YCbCr(img);
+		img_input = img_gray_RGB2YCbCr(img,&img_cb,&img_cr,scale);
 	}
-
-	Mat img_H,edges;
-	img_H.create(img_input.rows * scale, img_input.cols * scale, CV_8U);
-	edges.create(img_input.rows * scale, img_input.cols * scale, CV_8U);
 
 	// make a first&end-symmetrical input image
 	Mat img_input_sym;
@@ -877,7 +916,6 @@ Mat img_ipsia(string filename,int scale)
 
 	//Mat grad_angle;
 	//atan2(grad_y, grad_x, grad_angle);
-
 	//Mat _img_dest;
 	//double ostu_threh = threshold(img_input, _img_dest, 0, 255, CV_THRESH_BINARY | CV_THRESH_OTSU);// get the ostu threshold for canny
 	//Mat img_canny;
@@ -901,13 +939,39 @@ Mat img_ipsia(string filename,int scale)
 	Mat img_mask_clean; 
 	img_mask.copyTo(img_mask_clean, img_mask_clean_temp);
 
+	
+	Mat img_H, edges;
+	img_H = Mat::zeros(img_input.rows * scale, img_input.cols * scale, CV_8U);
+	edges = Mat::zeros(img_input.rows * scale, img_input.cols * scale, CV_8U);
 	// 
 	edgeProcess(img_input_sym, &img_H, &edges, img_mask_clean, grad_x, grad_y, scale);
-
+	Mat img_Hbiu;
+	resize(img_input, img_Hbiu,Size(0,0), scale, scale, INTER_CUBIC);
+	for (int i = 0; i < img_H.rows; i++)
+	{
+		for (int j = 0; j < img_H.cols; j++)
+		{
+			if (img_H.at<uchar>(i, j) == 0)
+			{
+				img_H.at<uchar>(i, j) = img_Hbiu.at<uchar>(i, j);
+			}
+		}
+	}
+ 	medianBlur(img_H, img_H, 3);
+	
+	Mat result_ycrcb;
+	vector<Mat>channels(3);
+	channels.at(0) = img_H;
+	channels.at(1) = img_cr;
+	channels.at(2) = img_cb;
+	merge(channels, result_ycrcb);
+	Mat result_rgb;
+	cvtColor(result_ycrcb, result_rgb, CV_YCrCb2BGR);
+	imwrite("result.bmp",result_rgb);
 	//Mat img_show;
 	//normalize(img_mask_clean, img_show, 0, 255, NORM_MINMAX);
-	namedWindow("mao", WINDOW_NORMAL);
-	imshow("mao", img_mask_clean);
+
+	imshow("mao", result_rgb);
 	waitKey();
 
 	return img_H;
