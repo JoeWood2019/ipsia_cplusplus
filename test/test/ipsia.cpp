@@ -902,7 +902,7 @@ Mat img_ipsia(string filename,int scale)
 	img_input_sym.row(1).copyTo(img_input_sym.row(0)); // (1,1:end)
 	img_input_sym.row(img_input_sym.rows - 2).copyTo(img_input_sym.row(img_input_sym.rows - 1));//(end,1:end)
 
-	// use sobel to get gx gy gm ag
+	// use sobel to get gx gy gm
 	Mat grad_x, grad_y;
 	Sobel(img_input, grad_x, CV_64F, 1, 0, 3, 1, 1, BORDER_REPLICATE);
 	Sobel(img_input, grad_y, CV_64F, 0, 1, 3, 1, 1, BORDER_REPLICATE);
